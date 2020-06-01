@@ -1,0 +1,9 @@
+{
+  "name": "meet",
+  "version": "1.0.0",
+  "main": "main.js",
+  "license": "MIT",
+  "dependencies": {
+    "electron": "^9.0.0"
+  }
+}
