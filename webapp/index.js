@@ -122,6 +122,15 @@ async function createPeer() {
     e.streams.forEach(stream => addVideo(stream));
   });
 
+  peer.addEventListener("negotiationneeded", async e => {
+    const offer = await peer.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: true,
+    });
+    await peer.setLocalDescription(offer);
+    sendSDP(offer);
+  });
+
   const offer = await peer.createOffer({
     offerToReceiveAudio: true,
     offerToReceiveVideo: true,
