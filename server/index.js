@@ -21,9 +21,21 @@ server.on("connection", (connection, req) => {
   connections[ID] = connection;
   console.log(Object.keys(connections).length);
 
+  setTimeout(() => { connection.send(JSON.stringify({ type: "list", data: Object.keys(connections) })) })
+
   connection.on("message", e => {
-    const data = JSON.parse(e);
-    Object.keys(connections).filter(id => id !== ID).forEach(id => connections[id].send(JSON.stringify({ id: ID, data })));
+    const message = JSON.parse(e);
+    switch(message.type) {
+      case "broadcast":
+        Object.keys(connections).filter(id => id !== ID)
+          .forEach(id => connections[id].send(JSON.stringify({ type: "broadcast", id: ID, data: message.data })));
+        break;
+      case "message":
+        if (Object.keys(connections).includes(message.target)) {
+          connections[message.target].send(JSON.stringify({ type: "message", id: ID, data: message.data }));
+        }
+        break;
+    }
   });
   connection.on("close", () => {
     delete connections[ID];

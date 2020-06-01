@@ -1,6 +1,3 @@
-const ID = Math.random().toString(32).substring(2);
-const ws = new WebSocket(`ws://localhost:8080?id=${ID}`);
-
 /**
  * @param {string} tag
  * @param {{[key: string]: any}} attributes
@@ -37,7 +34,10 @@ async function createMenu() {
   app?.append(
     h("div", {}, select,
       select,
-      h("button", { onClick: () => startCamera(select.value) }, "select")
+      h("button", { onClick: async () => {
+        const stream = await startCamera(select.value);
+        stream.getTracks().forEach(track => peer.addTrack(track, stream));
+      }}, "select")
     )
   );
 }
@@ -51,11 +51,7 @@ async function startCamera(deviceId) {
   app?.append(h("div", {}, video));
   video.srcObject = myStream;
   video.play();
-  myStream.getTracks().forEach(track => peer.addTrack(track, myStream));
-}
-
-function sendSDP(sdp) {
-  ws.send(JSON.stringify({ message: "sdp", data: sdp }))
+  return myStream;
 }
 
 /**
@@ -71,85 +67,158 @@ async function addVideo(stream) {
   video.srcObject = stream;
 }
 
-async function createPeer() {
-  const peer = new RTCPeerConnection();
-
-  ws.addEventListener("message", (e) => {
-    const data = JSON.parse(e.data);
-    receiveSdp(data.data);
-  });
-
-  function receiveSdp(data) {
-    switch(data.data.type) {
-      case "offer":
-        onOffer(data);
-        break;
-      case "answer":
-        onAnswer(data);
-        break;
-    }
-  }
-
-  async function onOffer(data) {
-    await peer.setRemoteDescription(data.data);
-    console.log("success to set remote description")
-    sendAnswer()
-  }
-
-  async function sendAnswer() {
-    const answer = await peer.createAnswer();
-    await peer.setLocalDescription(answer);
-    sendSDP(peer.localDescription);
-  }
-
-  async function onAnswer(data) {
-    await peer.setRemoteDescription(data.data);
-    console.log("success to set remote description answer")
-  }
-
-  peer.addEventListener("icecandidate", e => {
-    if (e.candidate) {
-    } else {
-      sendSDP(peer.localDescription);
-    }
-  })
-
-  peer.addEventListener("track", e => {
-    console.log(e);
-    e.streams.forEach(stream => addVideo(stream));
-  });
-
-  peer.addEventListener("negotiationneeded", async e => {
-    const offer = await peer.createOffer({
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: true,
-    });
-    await peer.setLocalDescription(offer);
-    sendSDP(offer);
-  });
-
-  const offer = await peer.createOffer({
-    offerToReceiveAudio: true,
-    offerToReceiveVideo: true,
-  });
-  await peer.setLocalDescription(offer);
-  sendSDP(offer);
-  return peer;
-}
-
-/** @type {RTCPeerConnection} */
-let peer;
-async function initialize() {
-  await createMenu();
-  peer = await createPeer();
-}
-
-/** @type {HTMLVideoElement} */
-initialize();
-
 class Peer {
   constructor() {
     this.ID = Math.random().toString(32).substring(2);
-    this.ws = new WebSocket(`ws://localhost:8080?id=${this.ID}`);
+    this.resolve = new Promise(ok => {
+      this.ws = new TargetedWebSocket(`ws://localhost:8080?id=${this.ID}`, () => ok());
+    });
+    this.ws.addEventListener(this.onReceiveSdpMessage.bind(this));
+    /** @type {any} */
+    this.peers = {};
+  }
+
+  onInitialize(cb) {
+    this.resolve.then(cb);
+  }
+
+  addTrack(track, stream) {
+    Object.keys(this.peers).forEach(id => {
+      const peer = this.peerInstance(id);
+      peer.addTrack(track, stream);
+    })
+  }
+
+  /**
+   * @param {string} id
+   * @returns {RTCPeerConnection}
+   */
+  peerInstance(id) {
+    if (this.peers[id]) {
+      return this.peers[id];
+    }
+    const peer = this.peers[id] = new RTCPeerConnection();
+    peer.addEventListener("icecandidate", e =>
+      !e.candidate && this.sendSdpToId(id, peer.localDescription || {}))
+
+    peer.addEventListener("track", e =>
+      e.streams.forEach(stream => addVideo(stream)));
+
+    peer.addEventListener("negotiationneeded", async e => {
+      const offer = await peer.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
+      await peer.setLocalDescription(offer);
+      this.sendSdpToId(id, offer);
+    });
+
+    return peer;
+  }
+
+  async requestConnection() {
+    this.ws.targets.filter(it => this.ID !== it).forEach(this.requestConnect.bind(this));
+  }
+
+  async requestConnect(id) {
+    const peer = this.peerInstance(id);
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    this.sendSdpToId(id, offer);
+  }
+
+  /**
+   * @param {string} from
+   * @param {RTCSessionDescriptionInit} offer
+   */
+  async onOffer(from, offer) {
+    const peer = this.peerInstance(from);
+    await peer.setRemoteDescription(offer);
+    console.log("success to set remote description")
+    this.sendAnswerTo(from);
+  }
+
+  /**
+   * @param {string} id
+   */
+  async sendAnswerTo(id) {
+    const peer = this.peerInstance(id);
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    this.sendSdpToId(id, peer.localDescription || {});
+  }
+
+  /**
+   * @param {string} from
+   * @param {RTCSessionDescriptionInit} answer
+   */
+  async onAnswer(from, answer) {
+    const peer = this.peerInstance(from);
+    await peer.setRemoteDescription(answer);
+  }
+
+  /**
+   * @param {string} id
+   * @param {RTCSessionDescriptionInit} sdp
+   */
+  sendSdpToId(id, sdp) {
+    this.ws.send(id, sdp);
+  }
+
+  onReceiveSdpMessage(id, data) {
+    switch (data.type) {
+      case "offer":
+        this.onOffer(id, data);
+        break;
+      case "answer":
+        this.onAnswer(id, data);
+        break;
+    }
   }
 }
+class TargetedWebSocket {
+  constructor(url, cb) {
+    /** @type {string[]} */
+    this.targets = [];
+    /** @type {((id: string, data: any) => void)[]} */
+    this.observables = [];
+    this.ws = new WebSocket(url);
+    this.ws.addEventListener("message", this.onMessage.bind(this));
+    this.ws.addEventListener("open", cb);
+  }
+
+  emit(message) {
+    this.observables.forEach(cb => cb(message.id, message.data));
+  }
+
+  onMessage(e) {
+    const message = JSON.parse(e.data);
+    switch(message.type) {
+      case "list":
+        this.targets = message.data;
+        break;
+      default:
+        this.emit(message);
+    }
+  }
+
+  addEventListener(cb) {
+    this.observables.push(cb);
+  }
+
+  send(target, data) {
+    this.ws.send(JSON.stringify({ type: "message", target, data }));
+  }
+
+  broadcast(data) {
+    this.ws.send(JSON.stringify({ type: "broadcast", data }));
+  }
+}
+
+const peer = new Peer();
+async function initialize() {
+  await createMenu();
+  peer.onInitialize(() => peer.requestConnection());
+}
+
+initialize();

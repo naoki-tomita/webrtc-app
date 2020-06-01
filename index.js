@@ -34,7 +34,10 @@ async function createMenu() {
   devices.forEach(it =>
     menu?.items[0].submenu?.items[0].submenu?.append(new MenuItem({
       label: it.label,
-      click: () => startCamera(it.deviceId),
+      click: async () => {
+        const stream = await startCamera(it.deviceId)
+        stream.getTracks().forEach(track => peer.addTrack(track, stream));
+      },
     }))
   );
   Menu.setApplicationMenu(menu);
@@ -42,45 +45,183 @@ async function createMenu() {
 
 const app = document.getElementById("app");
 async function startCamera(deviceId) {
-  const stream = await navigator.mediaDevices.getUserMedia({
+  const myStream = await navigator.mediaDevices.getUserMedia({
     video: { deviceId: { exact: deviceId } },
     audio: false,
   });
   const video = h("video", {});
   app?.append(h("div", {}, video));
+  video.srcObject = myStream;
+  video.play();
+  return myStream;
+}
+
+/**
+ * @param {MediaStream} stream
+ */
+async function addVideo(stream) {
+  const video = h("video", {});
+  const button = h("button", { style: { position: "absolute", top: 50, left: 30, zIndex: 1 }, onClick: () => (button.style.display = "none", video.play()) }, "play");
+  app?.append(h("div", {},
+    // button,
+    video,
+  ));
   video.srcObject = stream;
   video.play();
 }
 
-async function addVideo(stream) {
+class Peer {
+  constructor() {
+    this.ID = Math.random().toString(32).substring(2);
+    this.resolve = new Promise(ok => {
+      this.ws = new TargetedWebSocket(`ws://localhost:8080?id=${this.ID}`, () => ok());
+    });
+    this.ws.addEventListener(this.onReceiveSdpMessage.bind(this));
+    /** @type {any} */
+    this.peers = {};
+  }
 
-}
+  onInitialize(cb) {
+    this.resolve.then(cb);
+  }
 
-async function createPeer() {
-  const pc_config = {"iceServers":[ {"urls":"stun:stun.webrtc.ecl.ntt.com:3478"} ]};
-  const peer = new RTCPeerConnection(pc_config);
+  addTrack(track, stream) {
+    Object.keys(this.peers).forEach(id => {
+      const peer = this.peerInstance(id);
+      peer.addTrack(track, stream);
+    })
+  }
 
-  // リモートのMediaStreamTrackを受信した時
-  peer.addEventListener("track", e => {
-    addVideo(e.streams[0]);
-  });
-
-  // ICE Candidateを収集したときのイベント
-  peer.addEventListener("icecandidate", e => {
-    if (e.candidate) {
-      console.log(e.candidate);
-    } else {
-
+  /**
+   * @param {string} id
+   * @returns {RTCPeerConnection}
+   */
+  peerInstance(id) {
+    if (this.peers[id]) {
+      return this.peers[id];
     }
-  });
+    const peer = this.peers[id] = new RTCPeerConnection();
+    peer.addEventListener("icecandidate", e =>
+      !e.candidate && this.sendSdpToId(id, peer.localDescription || {}))
 
-  return peer;
+    peer.addEventListener("track", e =>
+      e.streams.forEach(stream => addVideo(stream)));
+
+    peer.addEventListener("negotiationneeded", async e => {
+      const offer = await peer.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
+      await peer.setLocalDescription(offer);
+      this.sendSdpToId(id, offer);
+    });
+
+    return peer;
+  }
+
+  async requestConnection() {
+    this.ws.targets.filter(it => this.ID !== it).forEach(this.requestConnect.bind(this));
+  }
+
+  async requestConnect(id) {
+    const peer = this.peerInstance(id);
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    this.sendSdpToId(id, offer);
+  }
+
+  /**
+   * @param {string} from
+   * @param {RTCSessionDescriptionInit} offer
+   */
+  async onOffer(from, offer) {
+    const peer = this.peerInstance(from);
+    await peer.setRemoteDescription(offer);
+    console.log("success to set remote description")
+    this.sendAnswerTo(from);
+  }
+
+  /**
+   * @param {string} id
+   */
+  async sendAnswerTo(id) {
+    const peer = this.peerInstance(id);
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    this.sendSdpToId(id, peer.localDescription || {});
+  }
+
+  /**
+   * @param {string} from
+   * @param {RTCSessionDescriptionInit} answer
+   */
+  async onAnswer(from, answer) {
+    const peer = this.peerInstance(from);
+    await peer.setRemoteDescription(answer);
+  }
+
+  /**
+   * @param {string} id
+   * @param {RTCSessionDescriptionInit} sdp
+   */
+  sendSdpToId(id, sdp) {
+    this.ws.send(id, sdp);
+  }
+
+  onReceiveSdpMessage(id, data) {
+    switch (data.type) {
+      case "offer":
+        this.onOffer(id, data);
+        break;
+      case "answer":
+        this.onAnswer(id, data);
+        break;
+    }
+  }
+}
+class TargetedWebSocket {
+  constructor(url, cb) {
+    /** @type {string[]} */
+    this.targets = [];
+    /** @type {((id: string, data: any) => void)[]} */
+    this.observables = [];
+    this.ws = new WebSocket(url);
+    this.ws.addEventListener("message", this.onMessage.bind(this));
+    this.ws.addEventListener("open", cb);
+  }
+
+  emit(message) {
+    this.observables.forEach(cb => cb(message.id, message.data));
+  }
+
+  onMessage(e) {
+    const message = JSON.parse(e.data);
+    switch(message.type) {
+      case "list":
+        this.targets = message.data;
+        break;
+      default:
+        this.emit(message);
+    }
+  }
+
+  addEventListener(cb) {
+    this.observables.push(cb);
+  }
+
+  send(target, data) {
+    this.ws.send(JSON.stringify({ type: "message", target, data }));
+  }
+
+  broadcast(data) {
+    this.ws.send(JSON.stringify({ type: "broadcast", data }));
+  }
 }
 
+const peer = new Peer();
 async function initialize() {
   await createMenu();
-  createPeer();
+  peer.onInitialize(() => peer.requestConnection());
 }
 
-/** @type {HTMLVideoElement} */
 initialize();
