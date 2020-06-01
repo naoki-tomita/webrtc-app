@@ -1,4 +1,5 @@
-const ws = new WebSocket("ws://localhost:8080");
+const ID = Math.random().toString(32).substring(2);
+const ws = new WebSocket(`ws://localhost:8080?id=${ID}`);
 
 /**
  * @param {string} tag
@@ -75,15 +76,11 @@ async function createPeer() {
 
   ws.addEventListener("message", (e) => {
     const data = JSON.parse(e.data);
-    switch(data.message) {
-      case "sdp":
-        onSdp(data.data);
-        break;
-    }
+    receiveSdp(data.data);
   });
 
-  function onSdp(data) {
-    switch(data.type) {
+  function receiveSdp(data) {
+    switch(data.data.type) {
       case "offer":
         onOffer(data);
         break;
@@ -94,7 +91,7 @@ async function createPeer() {
   }
 
   async function onOffer(data) {
-    await peer.setRemoteDescription(data);
+    await peer.setRemoteDescription(data.data);
     console.log("success to set remote description")
     sendAnswer()
   }
@@ -106,7 +103,7 @@ async function createPeer() {
   }
 
   async function onAnswer(data) {
-    await peer.setRemoteDescription(data);
+    await peer.setRemoteDescription(data.data);
     console.log("success to set remote description answer")
   }
 
@@ -149,3 +146,10 @@ async function initialize() {
 
 /** @type {HTMLVideoElement} */
 initialize();
+
+class Peer {
+  constructor() {
+    this.ID = Math.random().toString(32).substring(2);
+    this.ws = new WebSocket(`ws://localhost:8080?id=${this.ID}`);
+  }
+}

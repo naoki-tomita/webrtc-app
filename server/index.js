@@ -1,32 +1,33 @@
 const { Server } = require("ws");
 
 const server = new Server({ port: 8080 });
-/** @type {any[]} */
-let connections = [];
-/** @type {Map<any, any>} */
-let offers = new Map();
-server.on("connection", connection => {
-  connections.push(connection);
-  console.log(connections.length);
 
-  console.log("already connections: ", offers.size);
-  [...offers.values()].forEach(offer => {
-    console.log(offer);
-    connection.send(offer)
-  });
+/**
+ *
+ * @param {string} queryString
+ */
+function parseQuery(queryString) {
+  return queryString.split("&")
+    .map(it => it.split("="))
+    .reduce((prev, [key, value]) => ({ ...prev, [key]: value }), {})
+}
+
+/** @type {any} */
+const connections = {};
+server.on("connection", (connection, req) => {
+  /** @type {any} */
+  const query = parseQuery((req.url || "").split("?")[1] || "");
+  const ID = query.id;
+  connections[ID] = connection;
+  console.log(Object.keys(connections).length);
 
   connection.on("message", e => {
     const data = JSON.parse(e);
-    console.log(data.message, data.data.type);
-    if (data.data.type === "offer") {
-      offers.set(connection, e);
-    }
-    connections.filter(con => con !== connection).forEach(con => con.send(e));
+    Object.keys(connections).filter(id => id !== ID).forEach(id => connections[id].send(JSON.stringify({ id: ID, data })));
   });
   connection.on("close", () => {
-    connections = connections.filter(con => con !== connection);
-    offers.delete(connection);
+    delete connections[ID];
     connection.removeAllListeners();
-    console.log(connections.length);
+    console.log(Object.keys(connections).length);
   });
 });
