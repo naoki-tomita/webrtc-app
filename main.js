@@ -11,20 +11,20 @@ function createWindow () {
     frame: false,
     show: true,
     transparent: true,
-    // resizable: false,
+    resizable: false,
     alwaysOnTop: true,
     hasShadow: false,
     webPreferences: { nodeIntegration: true },
   });
-  // win.setIgnoreMouseEvents(true);
+  win.setIgnoreMouseEvents(true);
   win.maximize();
-  // app.dock.hide();
-  // win.setAlwaysOnTop(true, "floating");
-  // win.setVisibleOnAllWorkspaces(true);
+  app.dock.hide();
+  win.setAlwaysOnTop(true, "floating");
+  win.setVisibleOnAllWorkspaces(true);
   win.fullScreenable = false;
-  // app.dock.show();
+  app.dock.show();
   win.loadFile(join(__dirname, "index.html"));
-  win.webContents.openDevTools();
+  // win.webContents.openDevTools();
 }
 
 /**
