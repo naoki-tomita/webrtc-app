@@ -49,7 +49,11 @@ const app = document.getElementById("app");
  */
 async function startCamera(deviceId) {
   const myStream = await navigator.mediaDevices.getUserMedia({
-    video: { deviceId: { exact: deviceId } },
+    video: {
+      deviceId: { exact: deviceId },
+      frameRate: { ideal: 10, max: 15 },
+      width: 480, height: 300
+    },
     audio: false,
   });
   const video = h("video", {});
@@ -272,7 +276,7 @@ class TargetedWebSocket {
 const peer = new Peer();
 async function initialize() {
   await createMenu();
-  setTimeout(() => peer.requestConnection(), 2000)
+  setTimeout(() => peer.requestConnection(), 2000);
 }
 
 initialize();

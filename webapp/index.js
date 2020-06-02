@@ -107,15 +107,14 @@ class Peer {
     peer.addEventListener("icecandidate", e =>
       !e.candidate && this.sendSdpToId(id, peer.localDescription || {}))
 
-    peer.addEventListener("track", e => {
-      e.streams.forEach(stream => addVideo(stream))
-    });
+    peer.addEventListener("track", e =>
+      e.streams.forEach(stream => addVideo(stream)));
 
     peer.addEventListener("negotiationneeded", async e => {
       const offer = await peer.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: true,
-      })
+      });
       if (peer.signalingState != "stable") return;
       await peer.setLocalDescription(offer);
       this.sendSdpToId(id, peer.localDescription || {});
