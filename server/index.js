@@ -1,6 +1,6 @@
 const { Server } = require("ws");
 
-const server = new Server({ port: 8080 });
+const server = new Server({ port: parseInt(process.env.PORT || "8080", 10) });
 
 /**
  *
