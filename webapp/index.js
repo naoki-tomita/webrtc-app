@@ -76,6 +76,8 @@ class Peer {
     this.ws.addEventListener(this.onReceiveSdpMessage.bind(this));
     /** @type {any} */
     this.peers = {};
+    /** @type {{track: MediaStreamTrack, stream: MediaStream}[]} */
+    this.tracks = []
   }
 
   onInitialize(cb) {
@@ -83,6 +85,7 @@ class Peer {
   }
 
   addTrack(track, stream) {
+    this.tracks.push({ track, stream });
     Object.keys(this.peers).forEach(id => {
       const peer = this.peerInstance(id);
       peer.addTrack(track, stream);
@@ -115,6 +118,8 @@ class Peer {
       this.sendSdpToId(id, peer.localDescription || {});
     });
 
+    this.tracks.forEach(({ track, stream }) => peer.addTrack(track, stream));
+
     return peer;
   }
 
@@ -145,6 +150,10 @@ class Peer {
    */
   async sendAnswerTo(id) {
     const peer = this.peerInstance(id);
+    if (peer.connectionState === "connected") {
+      return;
+    }
+
     const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
     this.sendSdpToId(id, peer.localDescription || {});
@@ -156,6 +165,9 @@ class Peer {
    */
   async onAnswer(from, answer) {
     const peer = this.peerInstance(from);
+    if (peer.connectionState === "connected") {
+      return;
+    }
     await peer.setRemoteDescription(answer);
   }
 
@@ -164,6 +176,7 @@ class Peer {
    * @param {RTCSessionDescriptionInit} sdp
    */
   sendSdpToId(id, sdp) {
+    console.log("send to: ", id, sdp.type);
     this.ws.send(id, sdp);
   }
 

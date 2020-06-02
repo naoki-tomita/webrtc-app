@@ -44,6 +44,9 @@ async function createMenu() {
 }
 
 const app = document.getElementById("app");
+/**
+ * @param {string} deviceId
+ */
 async function startCamera(deviceId) {
   const myStream = await navigator.mediaDevices.getUserMedia({
     video: { deviceId: { exact: deviceId } },
@@ -79,13 +82,24 @@ class Peer {
     this.ws.addEventListener(this.onReceiveSdpMessage.bind(this));
     /** @type {any} */
     this.peers = {};
+    /** @type {{track: MediaStreamTrack, stream: MediaStream}[]} */
+    this.tracks = []
   }
 
+  /**
+   * @param {() => void} cb
+   */
   onInitialize(cb) {
     this.resolve.then(cb);
   }
 
+  /**
+   *
+   * @param {MediaStreamTrack} track
+   * @param {MediaStream} stream
+   */
   addTrack(track, stream) {
+    this.tracks.push({ track, stream });
     Object.keys(this.peers).forEach(id => {
       const peer = this.peerInstance(id);
       peer.addTrack(track, stream);
@@ -116,6 +130,8 @@ class Peer {
       this.sendSdpToId(id, offer);
     });
 
+    this.tracks.forEach(({ track, stream }) => peer.addTrack(track, stream));
+
     return peer;
   }
 
@@ -123,6 +139,9 @@ class Peer {
     this.ws.targets.filter(it => this.ID !== it).forEach(this.requestConnect.bind(this));
   }
 
+  /**
+   * @param {string} id
+   */
   async requestConnect(id) {
     const peer = this.peerInstance(id);
     const offer = await peer.createOffer();
@@ -146,6 +165,10 @@ class Peer {
    */
   async sendAnswerTo(id) {
     const peer = this.peerInstance(id);
+    if (peer.connectionState === "connected") {
+      return;
+    }
+
     const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
     this.sendSdpToId(id, peer.localDescription || {});
@@ -157,6 +180,10 @@ class Peer {
    */
   async onAnswer(from, answer) {
     const peer = this.peerInstance(from);
+    if (peer.connectionState === "connected") {
+      return;
+    }
+
     await peer.setRemoteDescription(answer);
   }
 
@@ -168,6 +195,11 @@ class Peer {
     this.ws.send(id, sdp);
   }
 
+  /**
+   *
+   * @param {string} id
+   * @param {RTCSessionDescriptionInit} data
+   */
   onReceiveSdpMessage(id, data) {
     switch (data.type) {
       case "offer":
@@ -180,6 +212,12 @@ class Peer {
   }
 }
 class TargetedWebSocket {
+
+  /**
+   *
+   * @param {string} url
+   * @param {() => void} cb
+   */
   constructor(url, cb) {
     /** @type {string[]} */
     this.targets = [];
@@ -190,10 +228,17 @@ class TargetedWebSocket {
     this.ws.addEventListener("open", cb);
   }
 
+  /**
+   *
+   * @param {{ id: string, data: any }} message
+   */
   emit(message) {
     this.observables.forEach(cb => cb(message.id, message.data));
   }
 
+  /**
+   * @param {{ data: string }} e
+   */
   onMessage(e) {
     const message = JSON.parse(e.data);
     switch(message.type) {
@@ -205,14 +250,25 @@ class TargetedWebSocket {
     }
   }
 
+  /**
+   *
+   * @param {(id: string, data: any) => void} cb
+   */
   addEventListener(cb) {
     this.observables.push(cb);
   }
 
+  /**
+   * @param {string} target
+   * @param {any} data
+   */
   send(target, data) {
     this.ws.send(JSON.stringify({ type: "message", target, data }));
   }
 
+  /**
+   * @param {any} data
+   */
   broadcast(data) {
     this.ws.send(JSON.stringify({ type: "broadcast", data }));
   }
