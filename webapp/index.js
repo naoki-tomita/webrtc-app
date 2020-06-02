@@ -1,3 +1,4 @@
+require("regenerator-runtime/runtime");
 const { Verbinden } = require("verbinden/client");
 
 /**
