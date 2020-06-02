@@ -10,6 +10,6 @@
   "scripts": {
     "dev": "parcel index.html",
     "prebuild": "rm -rf dist",
-    "build": "parcel build index.html"
+    "build": "parcel build --public-url ./ index.html"
   }
 }
