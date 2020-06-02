@@ -94,7 +94,12 @@ class Peer {
     if (this.peers[id]) {
       return this.peers[id];
     }
-    const peer = this.peers[id] = new RTCPeerConnection();
+    const peer = this.peers[id] = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.webrtc.ecl.ntt.com:3478" }
+      ]
+    });
+
     peer.addEventListener("icecandidate", e =>
       !e.candidate && this.sendSdpToId(id, peer.localDescription || {}))
 
