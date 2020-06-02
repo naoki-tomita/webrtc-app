@@ -70,7 +70,7 @@ async function addVideo(stream) {
 class Peer {
   constructor() {
     this.ID = Math.random().toString(32).substring(2);
-    this.ws = new TargetedWebSocket(`ws://webrtc-room7.herokuapp.com?id=${this.ID}`);
+    this.ws = new TargetedWebSocket(`wss://webrtc-room7.herokuapp.com?id=${this.ID}`);
     this.ws.addEventListener(this.onReceiveSdpMessage.bind(this));
     /** @type {any} */
     this.peers = {};

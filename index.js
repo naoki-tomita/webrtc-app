@@ -76,21 +76,12 @@ async function addVideo(stream) {
 class Peer {
   constructor() {
     this.ID = Math.random().toString(32).substring(2);
-    this.resolve = new Promise(ok => {
-      this.ws = new TargetedWebSocket(`ws://localhost:8080?id=${this.ID}`, () => ok());
-    });
+    this.ws = new TargetedWebSocket(`wss://webrtc-room7.herokuapp.com?id=${this.ID}`);
     this.ws.addEventListener(this.onReceiveSdpMessage.bind(this));
     /** @type {any} */
     this.peers = {};
     /** @type {{track: MediaStreamTrack, stream: MediaStream}[]} */
     this.tracks = []
-  }
-
-  /**
-   * @param {() => void} cb
-   */
-  onInitialize(cb) {
-    this.resolve.then(cb);
   }
 
   /**
@@ -216,16 +207,14 @@ class TargetedWebSocket {
   /**
    *
    * @param {string} url
-   * @param {() => void} cb
    */
-  constructor(url, cb) {
+  constructor(url) {
     /** @type {string[]} */
     this.targets = [];
     /** @type {((id: string, data: any) => void)[]} */
     this.observables = [];
     this.ws = new WebSocket(url);
     this.ws.addEventListener("message", this.onMessage.bind(this));
-    this.ws.addEventListener("open", cb);
   }
 
   /**
@@ -277,7 +266,7 @@ class TargetedWebSocket {
 const peer = new Peer();
 async function initialize() {
   await createMenu();
-  peer.onInitialize(() => peer.requestConnection());
+  setTimeout(() => peer.requestConnection(), 2000)
 }
 
 initialize();
