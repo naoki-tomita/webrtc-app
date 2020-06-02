@@ -227,7 +227,7 @@ class TargetedWebSocket {
 const peer = new Peer();
 async function initialize() {
   await createMenu();
-  setTimeout(() => peer.requestConnection(), 1000);
+  setTimeout(() => peer.requestConnection(), 2000);
 }
 
 initialize();

@@ -105,7 +105,11 @@ class Peer {
     if (this.peers[id]) {
       return this.peers[id];
     }
-    const peer = this.peers[id] = new RTCPeerConnection();
+    const peer = this.peers[id] = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.webrtc.ecl.ntt.com:3478" }
+      ]
+    });
     peer.addEventListener("icecandidate", e =>
       !e.candidate && this.sendSdpToId(id, peer.localDescription || {}))
 
@@ -117,8 +121,9 @@ class Peer {
         offerToReceiveAudio: true,
         offerToReceiveVideo: true,
       });
+      if (peer.signalingState != "stable") return;
       await peer.setLocalDescription(offer);
-      this.sendSdpToId(id, offer);
+      this.sendSdpToId(id, peer.localDescription || {});
     });
 
     this.tracks.forEach(({ track, stream }) => peer.addTrack(track, stream));
