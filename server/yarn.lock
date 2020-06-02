@@ -2,6 +2,19 @@
 # yarn lockfile v1
 
 
+typescript@^3.9.3:
+  version "3.9.3"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-3.9.3.tgz#d3ac8883a97c26139e42df5e93eeece33d610b8a"
+  integrity sha512-D/wqnB2xzNFIcoBG9FG8cXRDjiqSTbG2wd8DMZeQyJlP1vfTkIxH4GKveWaEBYySKIg+USu+E+EDIR47SqnaMQ==
+
+verbinden@^0.0.6:
+  version "0.0.6"
+  resolved "https://registry.yarnpkg.com/verbinden/-/verbinden-0.0.6.tgz#776b90fa7a7c0cf21d26500cf7ffcdd891308c8f"
+  integrity sha512-5SnjLBZ7uiU4HJbMDR8hIFJQ7XeXrkIOZLQc3XJWSmbGiuQpkJjFzxsqX/jIMRZfJDmrWRzmc/lK2JYOS9ggrA==
+  dependencies:
+    typescript "^3.9.3"
+    ws "^7.3.0"
+
 ws@^7.3.0:
   version "7.3.0"
   resolved "https://registry.yarnpkg.com/ws/-/ws-7.3.0.tgz#4b2f7f219b3d3737bc1a2fbf145d825b94d38ffd"

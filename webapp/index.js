@@ -1,3 +1,5 @@
+const { Verbinden } = require("verbinden/client");
+
 /**
  * @param {string} tag
  * @param {{[key: string]: any}} attributes
@@ -74,8 +76,8 @@ async function addVideo(stream) {
 class Peer {
   constructor() {
     this.ID = Math.random().toString(32).substring(2);
-    this.ws = new TargetedWebSocket(`wss://webrtc-room7.herokuapp.com?id=${this.ID}`);
-    this.ws.addEventListener(this.onReceiveSdpMessage.bind(this));
+    this.ws = new Verbinden(`wss://webrtc-room7.herokuapp.com`);
+    this.ws.on("signaling", this.onReceiveSdpMessage.bind(this));
     /** @type {any} */
     this.peers = {};
     /** @type {{track: MediaStreamTrack, stream: MediaStream}[]} */
@@ -126,7 +128,7 @@ class Peer {
   }
 
   async requestConnection() {
-    this.ws.targets.filter(it => this.ID !== it).forEach(this.requestConnect.bind(this));
+    this.ws.members.forEach(this.requestConnect.bind(this));
   }
 
   async requestConnect(id) {
@@ -179,7 +181,7 @@ class Peer {
    */
   sendSdpToId(id, sdp) {
     console.log("send to: ", id, sdp.type);
-    this.ws.send(id, sdp);
+    this.ws.channel("signaling").target(id).send(sdp);
   }
 
   onReceiveSdpMessage(id, data) {
@@ -191,44 +193,6 @@ class Peer {
         this.onAnswer(id, data);
         break;
     }
-  }
-}
-class TargetedWebSocket {
-  constructor(url) {
-    /** @type {string[]} */
-    this.targets = [];
-    /** @type {((id: string, data: any) => void)[]} */
-    this.observables = [];
-    this.ws = new WebSocket(url);
-    this.ws.addEventListener("message", this.onMessage.bind(this));
-  }
-
-  emit(message) {
-    this.observables.forEach(cb => cb(message.id, message.data));
-  }
-
-  onMessage(e) {
-    const message = JSON.parse(e.data);
-    console.log(message);
-    switch(message.type) {
-      case "list":
-        this.targets = message.data;
-        break;
-      default:
-        this.emit(message);
-    }
-  }
-
-  addEventListener(cb) {
-    this.observables.push(cb);
-  }
-
-  send(target, data) {
-    this.ws.send(JSON.stringify({ type: "message", target, data }));
-  }
-
-  broadcast(data) {
-    this.ws.send(JSON.stringify({ type: "broadcast", data }));
   }
 }
 

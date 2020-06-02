@@ -1,4 +1,5 @@
 const { remote } = require("electron");
+const { Verbinden } = require("verbinden/dist/client");
 const { Menu, MenuItem } = remote;
 
 /**
@@ -80,8 +81,8 @@ async function addVideo(stream) {
 class Peer {
   constructor() {
     this.ID = Math.random().toString(32).substring(2);
-    this.ws = new TargetedWebSocket(`wss://webrtc-room7.herokuapp.com?id=${this.ID}`);
-    this.ws.addEventListener(this.onReceiveSdpMessage.bind(this));
+    this.ws = new Verbinden(`wss://webrtc-room7.herokuapp.com`);
+    this.ws.on("signaling", this.onReceiveSdpMessage.bind(this));
     /** @type {any} */
     this.peers = {};
     /** @type {{track: MediaStreamTrack, stream: MediaStream}[]} */
@@ -106,11 +107,11 @@ class Peer {
    * @returns {RTCPeerConnection}
    */
   peerInstance(id) {
-    if (this.peers[id]) {
-      return this.peers[id];
-    }
+    if (this.peers[id]) return this.peers[id];
+
     const peer = this.peers[id] = new RTCPeerConnection({
       iceServers: [
+        // use skyway stun server.
         { urls: "stun:stun.webrtc.ecl.ntt.com:3478" }
       ]
     });
@@ -137,7 +138,7 @@ class Peer {
   }
 
   async requestConnection() {
-    this.ws.targets.filter(it => this.ID !== it).forEach(this.requestConnect.bind(this));
+    this.ws.members.forEach(this.requestConnect.bind(this));
   }
 
   /**
@@ -193,7 +194,7 @@ class Peer {
    * @param {RTCSessionDescriptionInit} sdp
    */
   sendSdpToId(id, sdp) {
-    this.ws.send(id, sdp);
+    this.ws.channel("signaling").target(id).send(sdp);
   }
 
   /**
@@ -210,66 +211,6 @@ class Peer {
         this.onAnswer(id, data);
         break;
     }
-  }
-}
-class TargetedWebSocket {
-
-  /**
-   *
-   * @param {string} url
-   */
-  constructor(url) {
-    /** @type {string[]} */
-    this.targets = [];
-    /** @type {((id: string, data: any) => void)[]} */
-    this.observables = [];
-    this.ws = new WebSocket(url);
-    this.ws.addEventListener("message", this.onMessage.bind(this));
-  }
-
-  /**
-   *
-   * @param {{ id: string, data: any }} message
-   */
-  emit(message) {
-    this.observables.forEach(cb => cb(message.id, message.data));
-  }
-
-  /**
-   * @param {{ data: string }} e
-   */
-  onMessage(e) {
-    const message = JSON.parse(e.data);
-    switch(message.type) {
-      case "list":
-        this.targets = message.data;
-        break;
-      default:
-        this.emit(message);
-    }
-  }
-
-  /**
-   *
-   * @param {(id: string, data: any) => void} cb
-   */
-  addEventListener(cb) {
-    this.observables.push(cb);
-  }
-
-  /**
-   * @param {string} target
-   * @param {any} data
-   */
-  send(target, data) {
-    this.ws.send(JSON.stringify({ type: "message", target, data }));
-  }
-
-  /**
-   * @param {any} data
-   */
-  broadcast(data) {
-    this.ws.send(JSON.stringify({ type: "broadcast", data }));
   }
 }
 
