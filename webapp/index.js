@@ -44,7 +44,11 @@ async function createMenu() {
 
 async function startCamera(deviceId) {
   const myStream = await navigator.mediaDevices.getUserMedia({
-    video: { deviceId: { exact: deviceId } },
+    video: {
+      deviceId: { exact: deviceId },
+      frameRate: { ideal: 10, max: 15 },
+      width: 480, height: 300
+    },
     audio: false,
   });
   const video = h("video", {});
