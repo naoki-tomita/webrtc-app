@@ -16,15 +16,15 @@ function createWindow () {
     hasShadow: false,
     webPreferences: { nodeIntegration: true },
   });
-  // win.setIgnoreMouseEvents(true);
+  win.setIgnoreMouseEvents(true);
   win.maximize();
-  // app.dock.hide();
-  // win.setAlwaysOnTop(true, "floating");
+  app.dock.hide();
+  win.setAlwaysOnTop(true, "floating");
   win.setVisibleOnAllWorkspaces(true);
   win.fullScreenable = false;
-  // app.dock.show();
+  app.dock.show();
   win.loadFile(join(__dirname, "index.html"));
-  win.webContents.openDevTools();
+  // win.webContents.openDevTools();
 }
 
 /**
